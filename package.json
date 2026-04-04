@@ -1,0 +1,11 @@
+{
+  "name": "taxsolutions",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"python -m uvicorn main:app --reload\" \"cd frontend && npm run dev\" \"cd frontend && npx nodemon --exec electron .\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.14"
+  }
+}
