@@ -69,6 +69,7 @@ def reconcile(
     # 1) GSTIN summary totals.
     purchase_totals = _group_tax_totals_by_gstin(purchase).rename(
         columns={
+            "taxable_value": "purchase_taxable_value",
             "cgst": "purchase_cgst",
             "sgst": "purchase_sgst",
             "igst": "purchase_igst",
@@ -76,6 +77,7 @@ def reconcile(
     )
     gstr_totals = _group_tax_totals_by_gstin(gstr).rename(
         columns={
+            "taxable_value": "gstr_taxable_value",
             "cgst": "gstr_cgst",
             "sgst": "gstr_sgst",
             "igst": "gstr_igst",
@@ -84,6 +86,7 @@ def reconcile(
 
     # Optimization: single outer merge at GSTIN grain avoids expensive per-GSTIN loops.
     summary_df = purchase_totals.merge(gstr_totals, how="outer", on="gstin", sort=False).fillna(0.0)
+    summary_df["diff_taxable_value"] = summary_df["purchase_taxable_value"] - summary_df["gstr_taxable_value"]
     summary_df["diff_cgst"] = summary_df["purchase_cgst"] - summary_df["gstr_cgst"]
     summary_df["diff_sgst"] = summary_df["purchase_sgst"] - summary_df["gstr_sgst"]
     summary_df["diff_igst"] = summary_df["purchase_igst"] - summary_df["gstr_igst"]
@@ -93,7 +96,8 @@ def reconcile(
 
     # 2) Invoice-level reconciliation only for GSTINs with any difference.
     mismatch_mask = (
-        (summary_df["diff_cgst"] != 0)
+        (summary_df["diff_taxable_value"] != 0)
+        | (summary_df["diff_cgst"] != 0)
         | (summary_df["diff_sgst"] != 0)
         | (summary_df["diff_igst"] != 0)
     )
@@ -126,7 +130,7 @@ def _prepare_for_reco(df: pd.DataFrame) -> pd.DataFrame:
     """
     Standardize critical reconciliation columns and aggregate duplicate invoices.
     """
-    required_cols = ["gstin", "invoice_no", "supplier_name", "cgst", "sgst", "igst"]
+    required_cols = ["gstin", "invoice_no", "supplier_name", "invoice_date", "taxable_value", "cgst", "sgst", "igst"]
     # Copy only required columns after we ensure presence; this limits memory churn.
     out = df.copy()
 
@@ -142,16 +146,18 @@ def _prepare_for_reco(df: pd.DataFrame) -> pd.DataFrame:
     out = out.dropna(subset=["gstin", "invoice_no"], how="any")
     out = out[(out["gstin"] != "") & (out["invoice_no"] != "")]
 
-    # Vectorized numeric coercion for all tax columns together.
-    tax_cols = ["cgst", "sgst", "igst"]
-    out[tax_cols] = out[tax_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
-    out[tax_cols] = out[tax_cols].astype("float64")
+    # Vectorized numeric coercion for all tax and value columns together.
+    numeric_cols = ["taxable_value", "cgst", "sgst", "igst"]
+    out[numeric_cols] = out[numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    out[numeric_cols] = out[numeric_cols].astype("float64")
 
     # Optimization: aggregate duplicate invoice keys up front.
     # This keeps the final outer merge close to unique-key cardinality.
     return (
         out.groupby(["gstin", "invoice_no"], as_index=False, sort=False).agg(
             supplier_name=("supplier_name", "first"),
+            invoice_date=("invoice_date", "first"),
+            taxable_value=("taxable_value", "sum"),
             cgst=("cgst", "sum"),
             sgst=("sgst", "sum"),
             igst=("igst", "sum"),
@@ -162,10 +168,10 @@ def _prepare_for_reco(df: pd.DataFrame) -> pd.DataFrame:
 
 def _group_tax_totals_by_gstin(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Compute total CGST/SGST/IGST per GSTIN.
+    Compute total taxable value and CGST/SGST/IGST per GSTIN.
     """
     return (
-        df.groupby("gstin", as_index=False, sort=False)[["cgst", "sgst", "igst"]]
+        df.groupby("gstin", as_index=False, sort=False)[["taxable_value", "cgst", "sgst", "igst"]]
         .sum()
         .reset_index(drop=True)
     )
@@ -194,20 +200,20 @@ def _invoice_level_reco(
     )
 
     # Vectorized numeric normalization.
-    purchase_tax_cols = ["cgst_purchase", "sgst_purchase", "igst_purchase"]
-    gstr_tax_cols = ["cgst_gstr", "sgst_gstr", "igst_gstr"]
-    merged[purchase_tax_cols] = (
-        merged[purchase_tax_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0).astype("float64")
+    purchase_cols = ["taxable_value_purchase", "cgst_purchase", "sgst_purchase", "igst_purchase"]
+    gstr_cols = ["taxable_value_gstr", "cgst_gstr", "sgst_gstr", "igst_gstr"]
+    merged[purchase_cols] = (
+        merged[purchase_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0).astype("float64")
     )
-    merged[gstr_tax_cols] = (
-        merged[gstr_tax_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0).astype("float64")
+    merged[gstr_cols] = (
+        merged[gstr_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0).astype("float64")
     )
 
     # Vectorized diff computation using NumPy arrays (fast for 20k+ rows).
-    purchase_arr = merged[purchase_tax_cols].to_numpy()
-    gstr_arr = merged[gstr_tax_cols].to_numpy()
+    purchase_arr = merged[purchase_cols].to_numpy()
+    gstr_arr = merged[gstr_cols].to_numpy()
     diff_arr = purchase_arr - gstr_arr
-    merged[["diff_cgst", "diff_sgst", "diff_igst"]] = diff_arr
+    merged[["diff_taxable_value", "diff_cgst", "diff_sgst", "diff_igst"]] = diff_arr
 
     # isclose handles floating representation noise while remaining vectorized.
     tol = max(float(tolerance_amount), 0.0)
@@ -231,14 +237,19 @@ def _invoice_level_reco(
         [
             "gstin",
             "invoice_no",
+            "invoice_date_purchase",
+            "invoice_date_gstr",
             "supplier_name_purchase",
             "supplier_name_gstr",
+            "taxable_value_purchase",
+            "taxable_value_gstr",
             "cgst_purchase",
             "sgst_purchase",
             "igst_purchase",
             "cgst_gstr",
             "sgst_gstr",
             "igst_gstr",
+            "diff_taxable_value",
             "diff_cgst",
             "diff_sgst",
             "diff_igst",
@@ -306,12 +317,14 @@ def _apply_fuzzy_supplier_matching(
 
         # Optional tolerance: compare total tax impact across the fuzzy pair.
         purchase_total = (
-            float(left_row["cgst_purchase"])
+            float(left_row["taxable_value_purchase"])
+            + float(left_row["cgst_purchase"])
             + float(left_row["sgst_purchase"])
             + float(left_row["igst_purchase"])
         )
         gstr_total = (
-            float(out.at[right_idx, "cgst_gstr"])
+            float(out.at[right_idx, "taxable_value_gstr"])
+            + float(out.at[right_idx, "cgst_gstr"])
             + float(out.at[right_idx, "sgst_gstr"])
             + float(out.at[right_idx, "igst_gstr"])
         )

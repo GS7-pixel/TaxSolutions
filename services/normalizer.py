@@ -62,8 +62,11 @@ def normalize(df: pd.DataFrame, config: NormalizationConfig) -> pd.DataFrame:
     out["invoice_no"] = out["invoice_no"].map(_safe_strip)
     out["supplier_name"] = out["supplier_name"].map(_safe_strip)
 
-    # Convert tax columns to float safely.
-    for col in ("cgst", "sgst", "igst"):
+    # Normalize invoice date
+    out["invoice_date"] = pd.to_datetime(out["invoice_date"], errors="coerce")
+
+    # Convert tax and value columns to float safely.
+    for col in ("taxable_value", "cgst", "sgst", "igst"):
         out[col] = pd.to_numeric(out[col], errors="coerce").astype("float64")
 
     return out

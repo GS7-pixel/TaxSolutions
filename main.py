@@ -16,7 +16,7 @@ from io import BytesIO
 import pandas as pd
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 
 from services.excel_writer import ExcelWriteOptions, write_reconciliation_output
 from services.file_reader import read_excel_sheets
@@ -155,14 +155,27 @@ def run_reconciliation_from_memory(
     """
     print("[INFO] Step 1/6: Reading input files from memory")
     purchase_raw_df = pd.read_excel(purchase_file_obj)
+    print(f"[DEBUG] Purchase raw columns: {list(purchase_raw_df.columns)}")
+    print(f"[DEBUG] Purchase raw shape: {purchase_raw_df.shape}")
+    print(f"[DEBUG] Purchase first 5 rows:\n{purchase_raw_df.head()}")
 
     print("[INFO] Step 2/6: Extracting GSTR-2B B2B data")
     gstr_b2b_raw_df = parse_gstr2b(gstr2b_file_obj)
+    print(f"[DEBUG] GSTR-2B raw columns: {list(gstr_b2b_raw_df.columns)}")
+    print(f"[DEBUG] GSTR-2B raw shape: {gstr_b2b_raw_df.shape}")
+    print(f"[DEBUG] GSTR-2B first 5 rows:\n{gstr_b2b_raw_df.head()}")
 
     print("[INFO] Step 3/6: Normalizing datasets")
     norm_config = NormalizationConfig.default()
     purchase_cleaned_df = normalize(purchase_raw_df, norm_config)
+    print(f"[DEBUG] Purchase normalized columns: {list(purchase_cleaned_df.columns)}")
+    print(f"[DEBUG] Purchase normalized shape: {purchase_cleaned_df.shape}")
+    print(f"[DEBUG] Purchase normalized first 5 rows:\n{purchase_cleaned_df.head()}")
+    
     gstr_b2b_cleaned_df = normalize(gstr_b2b_raw_df, norm_config)
+    print(f"[DEBUG] GSTR-2B normalized columns: {list(gstr_b2b_cleaned_df.columns)}")
+    print(f"[DEBUG] GSTR-2B normalized shape: {gstr_b2b_cleaned_df.shape}")
+    print(f"[DEBUG] GSTR-2B normalized first 5 rows:\n{gstr_b2b_cleaned_df.head()}")
 
     print("[INFO] Step 4/6: Running reconciliation")
     reco_config = ReconciliationConfig(
@@ -231,19 +244,40 @@ async def generate_reco(
                 content={"error": "Uploaded files are empty."},
             )
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_dir_path = Path(temp_dir)
-            output_path = temp_dir_path / "gst_reconciliation_output.xlsx"
+        # Create persistent output directory
+        output_dir = Path("outputs")
+        output_dir.mkdir(exist_ok=True)
+        output_path = output_dir / f"reconciliation_{purchase_file.filename}_{gstr2b_file.filename}.xlsx"
 
-            summary = run_reconciliation_from_memory(
-                purchase_file_obj=purchase_file_obj,
-                gstr2b_file_obj=gstr2b_file_obj,
-                output_path=output_path,
-            )
+        summary = run_reconciliation_from_memory(
+            purchase_file_obj=purchase_file_obj,
+            gstr2b_file_obj=gstr2b_file_obj,
+            output_path=output_path,
+        )
 
-            return {"success": True, "summary": summary}
+        return {"success": True, "summary": summary, "download_path": str(output_path)}
     except Exception as exc:
         print(f"[API][ERROR] {exc}")
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.get("/download/{filename}")
+async def download_file(filename: str):
+    """
+    Download generated reconciliation file.
+    """
+    try:
+        file_path = Path("outputs") / filename
+        if not file_path.exists():
+            return JSONResponse(status_code=404, content={"error": "File not found"})
+        
+        return FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as exc:
+        print(f"[API][ERROR] Download failed: {exc}")
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 

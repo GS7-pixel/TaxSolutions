@@ -17,6 +17,8 @@ STANDARD_COLUMNS: tuple[str, ...] = (
     "gstin",
     "invoice_no",
     "supplier_name",
+    "invoice_date",
+    "taxable_value",
     "cgst",
     "sgst",
     "igst",
@@ -54,6 +56,8 @@ class ColumnMapper:
                 "supplier gstin": "gstin",
                 "gstin/uinsupplier": "gstin",
                 "gstin/uin of supplier": "gstin",
+                "gstin of supplier/recipient": "gstin",
+                "gstin/uin of supplier (supplier gstin)": "gstin",
                 # Invoice number
                 "invoice number": "invoice_no",
                 "invoice no": "invoice_no",
@@ -63,6 +67,7 @@ class ColumnMapper:
                 "supplier invoice number": "invoice_no",
                 "supplier invoice no": "invoice_no",
                 "invoice": "invoice_no",
+                "invoice_no": "invoice_no",  # Already normalized
                 # Supplier name
                 "supplier name": "supplier_name",
                 "name of supplier": "supplier_name",
@@ -70,13 +75,32 @@ class ColumnMapper:
                 "trade/legal name": "supplier_name",
                 "trade name": "supplier_name",
                 "legal name": "supplier_name",
+                "supplier": "supplier_name",
+                "party name": "supplier_name",
+                "party": "supplier_name",
+                "customer name": "supplier_name",
+                "vendor name": "supplier_name",
+                "supplier_name": "supplier_name",  # Already normalized
                 # Tax columns
                 "cgst": "cgst",
+                "central tax": "cgst",
                 "sgst": "sgst",
+                "state tax": "sgst",
+                "state/ut tax": "sgst",
                 "utgst": "sgst",
                 "utgst/sgst": "sgst",
                 "sgst/utgst": "sgst",
                 "igst": "igst",
+                "integrated tax": "igst",
+                # Taxable value
+                "taxable value": "taxable_value",
+                "taxable": "taxable_value",
+                "value": "taxable_value",
+                "taxable_value": "taxable_value",  # Already normalized
+                # Invoice date
+                "invoice date": "invoice_date",
+                "date": "invoice_date",
+                "invoice_date": "invoice_date",  # Already normalized
             }
         )
 

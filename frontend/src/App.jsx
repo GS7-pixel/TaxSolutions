@@ -8,6 +8,7 @@ function App() {
   const [gstrFile, setGstrFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState(null)
+  const [downloadPath, setDownloadPath] = useState(null)
 
   console.log(purchaseFile, gstrFile)
 
@@ -18,6 +19,7 @@ function App() {
 
     setLoading(true)
     setResults(null)
+    setDownloadPath(null)
     console.log('Sending files to backend:', {
       purchaseFileName: purchaseFile.name,
       purchaseFileSize: purchaseFile.size,
@@ -47,11 +49,43 @@ function App() {
         missingIn2B: data.summary?.missing_in_2b ?? 0,
         missingInBooks: data.summary?.missing_in_books ?? 0,
       })
+      setDownloadPath(data.download_path)
       alert('Reconciliation complete')
     } catch (error) {
       alert('Error: ' + error.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    if (!downloadPath) {
+      alert('No file available for download')
+      return
+    }
+
+    try {
+      const filename = downloadPath.split('/').pop()
+      const response = await fetch(`http://127.0.0.1:8000/download/${filename}`, {
+        method: 'GET',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to download file')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.style.display = 'none'
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      alert('Error downloading file: ' + error.message)
     }
   }
 
@@ -90,7 +124,8 @@ function App() {
 
           <button
             type="button"
-            disabled={!results || loading}
+            onClick={handleDownload}
+            disabled={!downloadPath || loading}
             className="rounded-xl border border-slate-300 px-4 py-2 font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Download Reconciliation File
