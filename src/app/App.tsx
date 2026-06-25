@@ -94,7 +94,7 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
                 Download TaxSolution
               </motion.a>
               <motion.a
-                href="https://github.com/GS7-pixel/GXS-Sales-Management/releases/download/v1.0.0/GXS.Setup.1.0.0.exe"
+                href="https://github.com/GS7-pixel/GXS-Sales-Management/releases/latest/download/GXS-Setup.exe"
                 target="_blank"
                 rel="noopener noreferrer"
                 whileHover={{ scale: 1.02 }}
@@ -221,7 +221,7 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
 
                 <div className="space-y-3">
                   <motion.a
-                    href="https://github.com/GS7-pixel/GXS-Sales-Management/releases/download/v1.0.0/GXS.Setup.1.0.0.exe"
+                    href="https://github.com/GS7-pixel/GXS-Sales-Management/releases/latest/download/GXS-Setup.exe"
                     target="_blank"
                     rel="noopener noreferrer"
                     whileHover={{ x: 4 }}
@@ -355,7 +355,7 @@ function GXSOverviewPage({ setPage }: { setPage: (p: Page) => void }) {
               </p>
               <div className="flex flex-wrap gap-4">
                 <motion.a
-                  href="https://github.com/GS7-pixel/GXS-Sales-Management/releases/download/v1.0.0/GXS.Setup.1.0.0.exe"
+                  href="https://github.com/GS7-pixel/GXS-Sales-Management/releases/latest/download/GXS-Setup.exe"
                   target="_blank"
                   rel="noopener noreferrer"
                   whileHover={{ scale: 1.02 }}
@@ -701,7 +701,7 @@ function GXSFeaturesPage() {
 
           <div className="flex flex-wrap justify-center gap-4">
             <motion.a
-              href="https://github.com/GS7-pixel/GXS-Sales-Management/releases/download/v1.0.0/GXS.Setup.1.0.0.exe"
+              href="https://github.com/GS7-pixel/GXS-Sales-Management/releases/latest/download/GXS-Setup.exe"
               target="_blank"
               rel="noopener noreferrer"
               whileHover={{ scale: 1.02 }}
