@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { Download, Shield, FileCheck, Clock, BarChart3, TrendingUp, Users, Package, Zap, ShieldCheck, ChevronRight, ArrowLeft, CheckCircle } from "lucide-react";
 import { ImageWithFallback } from "./components/figma/ImageWithFallback";
 import gxsDashboard from "@/imports/image.png";
